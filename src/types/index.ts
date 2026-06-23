@@ -70,6 +70,26 @@ export interface Customer {
   updated_at: string;
 }
 
+export interface Employee {
+  id: string;
+  user_id: string | null;
+  employee_id: string;
+  name: string;
+  email: string | null;
+  phone: string;
+  role_id: string | null;
+  department: string | null;
+  hire_date: string;
+  salary: number | null;
+  is_active: boolean;
+  address: string | null;
+  emergency_contact: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  role?: Role;
+}
+
 export interface Order {
   id: string;
   order_number: string;
@@ -173,6 +193,64 @@ export interface Purchase {
   total_amount: number;
   gst_amount: number;
   status: 'pending' | 'received' | 'partial' | 'cancelled';
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface PurchaseItem {
+  id: string;
+  purchase_id: string;
+  product_id: string;
+  quantity: number;
+  unit_cost: number;
+  total: number;
+  created_at: string;
+}
+
+export interface Sale {
+  id: string;
+  sale_number: string;
+  customer_id: string | null;
+  employee_id: string | null;
+  sale_type: 'retail' | 'wholesale' | 'online';
+  subtotal: number;
+  discount: number;
+  gst_amount: number;
+  total: number;
+  payment_method: 'cash' | 'card' | 'upi' | 'credit' | 'mixed';
+  payment_status: 'pending' | 'paid' | 'partial' | 'refunded';
+  prescription_id: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  customer?: Customer;
+  employee?: Employee;
+  items?: SaleItem[];
+}
+
+export interface SaleItem {
+  id: string;
+  sale_id: string;
+  product_id: string | null;
+  product_name: string;
+  product_sku: string | null;
+  quantity: number;
+  unit_price: number;
+  gst_rate: number;
+  gst_amount: number | null;
+  discount: number;
+  total: number;
+  created_at: string;
+}
+
+export interface InventoryMovement {
+  id: string;
+  product_id: string;
+  movement_type: 'purchase' | 'sale' | 'adjustment' | 'return';
+  quantity: number;
+  reference_id: string | null;
+  reference_type: string | null;
   notes: string | null;
   created_by: string | null;
   created_at: string;
