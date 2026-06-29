@@ -23,6 +23,7 @@ import WishlistPage from './pages/WishlistPage';
 import LoginPage from './pages/LoginPage';
 import OrderTrackingPage from './pages/OrderTrackingPage';
 import AISearchPage from './pages/AISearchPage';
+import PrescriptionPage from './pages/PrescriptionPage';
 
 // SEO Pages
 import OpticalStoreHyderabadPage from './pages/OpticalStoreHyderabadPage';
@@ -46,6 +47,7 @@ import AdminReportsPage from './pages/admin/AdminReportsPage';
 import AdminPurchasesPage from './pages/admin/AdminPurchasesPage';
 import AdminAlertsPage from './pages/admin/AdminAlertsPage';
 import AdminPrescriptionsPage from './pages/admin/AdminPrescriptionsPage';
+import AdminCustomerRemindersPage from './pages/admin/AdminCustomerRemindersPage';
 
 function ProtectedAdminRoute({ children, requiredRole }: { children: React.ReactNode; requiredRole?: string }) {
   const { isAdmin, loading, userRole } = useAuth();
@@ -116,6 +118,7 @@ function App() {
                   <Route path="virtual-try-on" element={<VirtualTryOnPage />} />
                   <Route path="ai-stylist" element={<AIStylistPage />} />
                   <Route path="ai-search" element={<AISearchPage />} />
+                  <Route path="prescription" element={<PrescriptionPage />} />
                   <Route path="optical-store-hyderabad" element={<OpticalStoreHyderabadPage />} />
                   <Route path="eyeglasses-abids" element={<EyeglassesAbidsPage />} />
                   <Route path="contact-lenses-hyderabad" element={<ContactLensesPage />} />
@@ -140,6 +143,7 @@ function App() {
                   <Route path="purchases" element={<InventoryRoute><AdminPurchasesPage /></InventoryRoute>} />
                   <Route path="alerts" element={<InventoryRoute><AdminAlertsPage /></InventoryRoute>} />
                   <Route path="prescriptions" element={<SalesRoute><AdminPrescriptionsPage /></SalesRoute>} />
+                  <Route path="reminders" element={<SalesRoute><AdminCustomerRemindersPage /></SalesRoute>} />
                   <Route path="settings" element={<div className="text-center py-20 text-gray-500">Settings page coming soon</div>} />
                   <Route path="notifications" element={<div className="text-center py-20 text-gray-500">Notifications page coming soon</div>} />
                 </Route>
