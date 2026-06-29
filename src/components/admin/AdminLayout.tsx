@@ -16,6 +16,7 @@ import {
   DollarSign,
   Database,
   Pill,
+  FileText,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -32,6 +33,7 @@ export default function AdminLayout() {
     { to: '/admin/inventory', icon: Package, label: 'Inventory' },
     { to: '/admin/orders', icon: ShoppingCart, label: 'Orders' },
     { to: '/admin/customers', icon: Users, label: 'Customers' },
+    { to: '/admin/prescriptions', icon: FileText, label: 'Prescriptions' },
     { to: '/admin/purchases', icon: Truck, label: 'Purchases' },
     { to: '/admin/reports', icon: BarChart3, label: 'Reports' },
     { to: '/admin/alerts', icon: AlertTriangle, label: 'Alerts' },

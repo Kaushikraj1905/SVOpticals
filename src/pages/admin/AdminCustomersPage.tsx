@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Search, Eye, ShoppingBag, Calendar, Mail, Phone } from 'lucide-react';
+import { Search, Eye, ShoppingBag, Calendar, Mail, Phone, FileText, Plus } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Customer, Order } from '../../types';
+import { Customer, Order, Prescription } from '../../types';
 
 interface CustomerWithOrders extends Customer {
   orders?: Order[];
+  prescriptions?: Prescription[];
   orderCount?: number;
   totalSpent?: number;
+  prescriptionCount?: number;
 }
 
 export default function AdminCustomersPage() {

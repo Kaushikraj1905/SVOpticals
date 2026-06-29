@@ -145,18 +145,26 @@ export interface Prescription {
   id: string;
   customer_id: string | null;
   order_id: string | null;
-  file_url: string;
+  file_url: string | null;
+  file_name: string | null;
   left_eye_sphere: number | null;
   left_eye_cylinder: number | null;
   left_eye_axis: number | null;
   left_eye_add: number | null;
+  left_eye_va: string | null;
   right_eye_sphere: number | null;
   right_eye_cylinder: number | null;
   right_eye_axis: number | null;
   right_eye_add: number | null;
+  right_eye_va: string | null;
   pd: number | null;
+  lens_type: string | null;
+  lens_brand: string | null;
+  lens_coating: string | null;
+  prescription_date: string | null;
   notes: string | null;
   created_at: string;
+  customer?: Customer;
 }
 
 export interface Role {

@@ -38,6 +38,7 @@ import AdminCustomersPage from './pages/admin/AdminCustomersPage';
 import AdminReportsPage from './pages/admin/AdminReportsPage';
 import AdminPurchasesPage from './pages/admin/AdminPurchasesPage';
 import AdminAlertsPage from './pages/admin/AdminAlertsPage';
+import AdminPrescriptionsPage from './pages/admin/AdminPrescriptionsPage';
 
 function ProtectedAdminRoute({ children, requiredRole }: { children: React.ReactNode; requiredRole?: string }) {
   const { isAdmin, loading, userRole } = useAuth();
@@ -126,6 +127,7 @@ function App() {
                   <Route path="reports" element={<ProtectedAdminRoute requiredRole="manager"><AdminReportsPage /></ProtectedAdminRoute>} />
                   <Route path="purchases" element={<InventoryRoute><AdminPurchasesPage /></InventoryRoute>} />
                   <Route path="alerts" element={<InventoryRoute><AdminAlertsPage /></InventoryRoute>} />
+                  <Route path="prescriptions" element={<SalesRoute><AdminPrescriptionsPage /></SalesRoute>} />
                   <Route path="settings" element={<div className="text-center py-20 text-gray-500">Settings page coming soon</div>} />
                   <Route path="notifications" element={<div className="text-center py-20 text-gray-500">Notifications page coming soon</div>} />
                 </Route>
