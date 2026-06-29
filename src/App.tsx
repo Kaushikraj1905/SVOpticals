@@ -21,6 +21,8 @@ import CartPage from './pages/CartPage';
 import CheckoutPage from './pages/CheckoutPage';
 import WishlistPage from './pages/WishlistPage';
 import LoginPage from './pages/LoginPage';
+import OrderTrackingPage from './pages/OrderTrackingPage';
+import AISearchPage from './pages/AISearchPage';
 
 // Virtual Try-On
 import VirtualTryOnPage from './pages/virtual-tryon/VirtualTryOnPage';
@@ -34,9 +36,11 @@ import AdminInventoryPage from './pages/admin/AdminInventoryPage';
 import AdminOrdersPage from './pages/admin/AdminOrdersPage';
 import AdminCustomersPage from './pages/admin/AdminCustomersPage';
 import AdminReportsPage from './pages/admin/AdminReportsPage';
+import AdminPurchasesPage from './pages/admin/AdminPurchasesPage';
+import AdminAlertsPage from './pages/admin/AdminAlertsPage';
 
-function ProtectedAdminRoute({ children }: { children: React.ReactNode }) {
-  const { isAdmin, loading } = useAuth();
+function ProtectedAdminRoute({ children, requiredRole }: { children: React.ReactNode; requiredRole?: string }) {
+  const { isAdmin, loading, userRole } = useAuth();
 
   if (loading) {
     return (
@@ -50,6 +54,32 @@ function ProtectedAdminRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
+  if (requiredRole && userRole !== 'owner' && userRole !== 'manager') {
+    return <Navigate to="/admin" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function InventoryRoute({ children }: { children: React.ReactNode }) {
+  const { isAdmin, loading, isOwner, isManager, isInventoryStaff } = useAuth();
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-navy-800"></div>
+    </div>
+  );
+  if (!isAdmin || (!isOwner && !isManager && !isInventoryStaff)) return <Navigate to="/admin" replace />;
+  return <>{children}</>;
+}
+
+function SalesRoute({ children }: { children: React.ReactNode }) {
+  const { isAdmin, loading, isOwner, isManager, isSalesStaff } = useAuth();
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-navy-800"></div>
+    </div>
+  );
+  if (!isAdmin || (!isOwner && !isManager && !isSalesStaff)) return <Navigate to="/admin" replace />;
   return <>{children}</>;
 }
 
@@ -74,8 +104,10 @@ function App() {
                   <Route path="checkout" element={<CheckoutPage />} />
                   <Route path="wishlist" element={<WishlistPage />} />
                   <Route path="login" element={<LoginPage />} />
+                  <Route path="order-tracking" element={<OrderTrackingPage />} />
                   <Route path="virtual-try-on" element={<VirtualTryOnPage />} />
                   <Route path="ai-stylist" element={<AIStylistPage />} />
+                  <Route path="ai-search" element={<AISearchPage />} />
                 </Route>
 
                 {/* Admin Routes */}
@@ -88,10 +120,12 @@ function App() {
                   }
                 >
                   <Route index element={<AdminDashboardPage />} />
-                  <Route path="inventory" element={<AdminInventoryPage />} />
-                  <Route path="orders" element={<AdminOrdersPage />} />
-                  <Route path="customers" element={<AdminCustomersPage />} />
-                  <Route path="reports" element={<AdminReportsPage />} />
+                  <Route path="inventory" element={<InventoryRoute><AdminInventoryPage /></InventoryRoute>} />
+                  <Route path="orders" element={<SalesRoute><AdminOrdersPage /></SalesRoute>} />
+                  <Route path="customers" element={<SalesRoute><AdminCustomersPage /></SalesRoute>} />
+                  <Route path="reports" element={<ProtectedAdminRoute requiredRole="manager"><AdminReportsPage /></ProtectedAdminRoute>} />
+                  <Route path="purchases" element={<InventoryRoute><AdminPurchasesPage /></InventoryRoute>} />
+                  <Route path="alerts" element={<InventoryRoute><AdminAlertsPage /></InventoryRoute>} />
                   <Route path="settings" element={<div className="text-center py-20 text-gray-500">Settings page coming soon</div>} />
                   <Route path="notifications" element={<div className="text-center py-20 text-gray-500">Notifications page coming soon</div>} />
                 </Route>

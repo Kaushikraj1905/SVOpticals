@@ -2,15 +2,23 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
+type UserRole = 'owner' | 'manager' | 'sales_staff' | 'inventory_staff' | 'customer' | null;
+
 interface AuthContextType {
   session: Session | null;
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
-  userRole: string | null;
+  userRole: UserRole;
+  isOwner: boolean;
+  isManager: boolean;
+  isSalesStaff: boolean;
+  isInventoryStaff: boolean;
+  permissions: Record<string, boolean>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, name: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ error: Error | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,7 +28,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<UserRole>(null);
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
+
+  const isOwner = userRole === 'owner';
+  const isManager = userRole === 'manager';
+  const isSalesStaff = userRole === 'sales_staff';
+  const isInventoryStaff = userRole === 'inventory_staff';
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -36,17 +50,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     initializeAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
 
       if (newSession?.user) {
-        await fetchUserRole(newSession.user.id);
+        (async () => {
+          await fetchUserRole(newSession.user.id);
+        })();
       } else {
         setIsAdmin(false);
         setUserRole(null);
+        setPermissions({});
       }
-      setLoading(false);
     });
 
     return () => {
@@ -58,22 +74,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase
         .from('user_roles')
-        .select('roles(name)')
+        .select('roles(name, permissions)')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
-      if (error) {
+      if (error || !data) {
         setIsAdmin(false);
         setUserRole(null);
+        setPermissions({});
         return;
       }
 
-      const roleName = data?.roles?.name as string | undefined;
-      setUserRole(roleName ?? null);
+      const roleName = data?.roles?.name as UserRole;
+      const rolePermissions = (data?.roles?.permissions as Record<string, boolean>) || {};
+
+      setUserRole(roleName);
+      setPermissions(rolePermissions);
       setIsAdmin(['owner', 'manager', 'sales_staff', 'inventory_staff'].includes(roleName ?? ''));
     } catch {
       setIsAdmin(false);
       setUserRole(null);
+      setPermissions({});
     }
   };
 
@@ -92,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
         options: {
-          data: { name },
+          data: { name, role: 'customer' },
         },
       });
       return { error };
@@ -107,10 +128,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setIsAdmin(false);
     setUserRole(null);
+    setPermissions({});
+  };
+
+  const resetPassword = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/login`,
+      });
+      return { error };
+    } catch (e) {
+      return { error: e as Error };
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, isAdmin, userRole, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{
+      session, user, loading, isAdmin, userRole,
+      isOwner, isManager, isSalesStaff, isInventoryStaff,
+      permissions, signIn, signUp, signOut, resetPassword,
+    }}>
       {children}
     </AuthContext.Provider>
   );

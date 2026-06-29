@@ -1,488 +1,425 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import {
-  Camera,
-  Upload,
-  SwitchCamera,
-  Download,
-  Share2,
-  MessageCircle,
-  ShoppingBag,
-  Heart,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  Loader,
-  AlertCircle,
-} from 'lucide-react';
-import { supabase } from '../../lib/supabase';
-import { useLanguage } from '../../contexts/LanguageContext';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Camera, Upload, RotateCw, ZoomIn, ZoomOut, Share2, ShoppingCart, X, Sparkles, CameraOff, Camera as CameraIcon } from 'lucide-react';
 import { useCart } from '../../contexts/CartContext';
-import { useWishlist } from '../../contexts/WishlistContext';
-import { Product } from '../../types';
+import { supabase } from '../../lib/supabase';
+import html2canvas from 'html2canvas';
+
+interface FrameModel {
+  id: string;
+  name: string;
+  image_url: string;
+  product_id: string;
+}
 
 export default function VirtualTryOnPage() {
-  const { t, language } = useLanguage();
-  const { addItem: addToCart } = useCart();
-  const { addItem: addToWishlist, isInWishlist } = useWishlist();
-
-  // State
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [cameraActive, setCameraActive] = useState(false);
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [frameIndex, setFrameIndex] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [capturing, setCapturing] = useState(false);
-
-  // Refs
+  const { addItem } = useCart();
+  const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const captureAreaRef = useRef<HTMLDivElement>(null);
 
-  // Face detection state
-  const [facePosition, setFacePosition] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const animationRef = useRef<number>();
+  const [cameraActive, setCameraActive] = useState(false);
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [frames, setFrames] = useState<FrameModel[]>([]);
+  const [selectedFrame, setSelectedFrame] = useState<FrameModel | null>(null);
+  const [frameScale, setFrameScale] = useState(1);
+  const [frameRotation, setFrameRotation] = useState(0);
+  const [framePosition, setFramePosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [loading, setLoading] = useState(true);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [showShare, setShowShare] = useState(false);
+  const [showFrameAdded, setShowFrameAdded] = useState(false);
 
-  // Frame categories
-  const categories = ['frames-men', 'frames-women', 'frames-kids'];
-  const [activeCategory, setActiveCategory] = useState('frames-men');
-
-  // Fetch products
+  // Fetch frame products
   useEffect(() => {
-    fetchProducts();
+    const fetchFrames = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, name, image_urls, sku')
+          .eq('is_active', true)
+          .limit(12);
+
+        if (error) throw error;
+
+        const frameModels = (data || []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          image_url: p.image_urls?.[0] || 'https://images.pexels.com/photos/7018515/pexels-photo-7018515.jpeg?auto=compress&cs=tinysrgb&w=400',
+          product_id: p.id,
+        }));
+        setFrames(frameModels);
+        if (frameModels.length > 0) setSelectedFrame(frameModels[0]);
+      } catch (error) {
+        console.error('Error fetching frames:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchFrames();
   }, []);
 
-  const fetchProducts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          *,
-          brand:brands(*),
-          category:product_categories(*),
-          inventory(*)
-        `)
-        .eq('is_active', true)
-        .in('category_id', (await supabase
-          .from('product_categories')
-          .select('id')
-          .or('slug.ilike.%frames%')).data?.map(c => c.id) || [])
-        .limit(20);
-
-      if (error) throw error;
-      setProducts(data || []);
-      if (data && data.length > 0) {
-        setSelectedProduct(data[0]);
-      }
-    } catch (err) {
-      console.error('Error fetching products:', err);
-      setError('Failed to load products');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Camera functions
+  // Start camera
   const startCamera = async () => {
+    setCameraError(null);
     try {
-      setError(null);
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: 640, height: 480 },
-        audio: false,
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
       });
-      streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
         setCameraActive(true);
-        detectFace();
+        setUploadedImage(null);
       }
-    } catch (err) {
-      console.error('Error accessing camera:', err);
-      setError('Camera access denied. Please allow camera access or upload a photo.');
+    } catch (err: any) {
+      setCameraError(err.message || 'Could not access camera');
+      setCameraActive(false);
     }
   };
 
+  // Stop camera
   const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    if (animationRef.current) {
-      cancelAnimationFrame(animationRef.current);
+    if (videoRef.current?.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
     }
     setCameraActive(false);
   };
 
-  // Face detection (simplified - would use TensorFlow.js/MediaPipe in production)
-  const detectFace = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current) {
-      animationRef.current = requestAnimationFrame(detectFace);
-      return;
-    }
-
-    const video = videoRef.current;
-    const ctx = canvasRef.current.getContext('2d');
-
-    if (!ctx) {
-      animationRef.current = requestAnimationFrame(detectFace);
-      return;
-    }
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-
-    // Draw video frame
-    ctx.save();
-    ctx.translate(canvasRef.current.width, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, canvasRef.current.width, canvasRef.current.height);
-    ctx.restore();
-
-    // Simple face estimation (center of frame)
-    setFacePosition({
-      x: canvasRef.current.width / 2 - 80,
-      y: canvasRef.current.height / 2 - 40,
-      width: 160,
-      height: 80,
-    });
-
-    animationRef.current = requestAnimationFrame(detectFace);
-  }, []);
-
-  // Upload image
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Upload selfie
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setUploadedImage(event.target?.result as string);
-        setCameraActive(false);
-        stopCamera();
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Capture image
-  const captureImage = () => {
-    if (!canvasRef.current) return;
-
-    setCapturing(true);
-    const dataUrl = canvasRef.current.toDataURL('image/png');
-
-    // Download
-    const link = document.createElement('a');
-    link.download = 'sv-opticals-tryon.png';
-    link.href = dataUrl;
-    link.click();
-    setCapturing(false);
-  };
-
-  // Share to WhatsApp
-  const shareToWhatsApp = () => {
-    if (!selectedProduct) return;
-
-    const productName = language === 'te' && selectedProduct.name_te ? selectedProduct.name_te : selectedProduct.name;
-    const message = `I tried ${productName} virtually at S V Opticals website.
-
-See the world through us!
-
-Visit: ${window.location.origin}/products/${selectedProduct.id}
-
-I'm interested in this frame. Please provide more details.`;
-
-    const whatsappUrl = `https://wa.me/919441273074?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
-  };
-
-  // Filter products by category
-  const filteredProducts = products.filter(p => p.category?.slug === activeCategory);
-
-  // Cleanup
-  useEffect(() => {
-    return () => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setUploadedImage(event.target?.result as string);
       stopCamera();
     };
+    reader.readAsDataURL(file);
+  };
+
+  // Drag handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - framePosition.x, y: e.clientY - framePosition.y });
+  };
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDragging) return;
+    setFramePosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+  }, [isDragging, dragStart]);
+  const handleMouseUp = () => setIsDragging(false);
+
+  // Touch handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    setIsDragging(true);
+    setDragStart({ x: touch.clientX - framePosition.x, y: touch.clientY - framePosition.y });
+  };
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!isDragging) return;
+    const touch = e.touches[0];
+    setFramePosition({ x: touch.clientX - dragStart.x, y: touch.clientY - dragStart.y });
+  }, [isDragging, dragStart]);
+  const handleTouchEnd = () => setIsDragging(false);
+
+  // Take screenshot
+  const takeScreenshot = async () => {
+    if (!captureAreaRef.current) return;
+    try {
+      const canvas = await html2canvas(captureAreaRef.current, {
+        useCORS: true,
+        allowTaint: true,
+      });
+      const link = document.createElement('a');
+      link.download = `sv-opticals-tryon-${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (error) {
+      console.error('Screenshot error:', error);
+    }
+  };
+
+  // Share via WhatsApp
+  const shareWhatsApp = () => {
+    const text = `Check out this amazing frame from S V Opticals! ${selectedFrame?.name || 'Virtual Try-On'}`;
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
+
+  // Add to cart
+  const addToCart = async () => {
+    if (!selectedFrame) return;
+    try {
+      const { data } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', selectedFrame.product_id)
+        .single();
+      if (data) {
+        await addItem(data, 1);
+        setShowFrameAdded(true);
+        setTimeout(() => setShowFrameAdded(false), 3000);
+      }
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+    }
+  };
+
+  useEffect(() => {
+    return () => stopCamera();
   }, []);
 
-  const frameStyles = [
-    { name: 'Classic Rectangle', ratio: 1.8 },
-    { name: 'Round', ratio: 1.4 },
-    { name: 'Aviator', ratio: 1.6 },
-    { name: 'Cat Eye', ratio: 1.5 },
-    { name: 'Square', ratio: 1.3 },
-  ];
+  const displayImage = uploadedImage || (cameraActive ? undefined : null);
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-navy-900 text-white py-16">
-        <div className="container mx-auto px-4 text-center">
-          <h1 className="font-display text-3xl md:text-4xl font-bold mb-4">
-            Virtual Try-On
-          </h1>
-          <p className="text-gray-300 max-w-2xl mx-auto">
-            Try before you buy! Use our virtual try-on feature to see how frames look on you.
-          </p>
+      <div className="bg-navy-900 text-white">
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-2 text-white hover:text-gold-400 transition-colors">
+              <ArrowLeft size={20} />
+              <span className="hidden sm:inline">Back to Store</span>
+            </Link>
+            <h1 className="font-display text-xl md:text-2xl font-bold flex items-center gap-2">
+              <Sparkles className="text-gold-400" size={24} />
+              Virtual Try-On
+            </h1>
+            <div className="w-20" />
+          </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Main Try-On Area */}
-          <div className="lg:col-span-2">
-            {/* Error */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 flex items-center gap-3">
-                <AlertCircle className="text-red-500" />
-                <p className="text-red-700">{error}</p>
+      {/* Main Content */}
+      <div className="container mx-auto px-4 py-6">
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Camera / Upload Area */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Camera Controls */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={cameraActive ? stopCamera : startCamera}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                  cameraActive ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-navy-800 text-white hover:bg-navy-900'
+                }`}
+              >
+                {cameraActive ? <CameraOff size={18} /> : <CameraIcon size={18} />}
+                {cameraActive ? 'Stop Camera' : 'Start Camera'}
+              </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-navy-800 text-navy-800 rounded-lg font-medium hover:bg-navy-50 transition-colors"
+              >
+                <Upload size={18} />
+                Upload Selfie
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" />
+            </div>
+
+            {cameraError && (
+              <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm">
+                Camera error: {cameraError}. Please try uploading a selfie instead.
               </div>
             )}
 
-            {/* Camera/Upload Section */}
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-              <div className="relative aspect-[4/3] bg-gray-900">
-                {/* Video Feed */}
+            {/* Capture Area */}
+            <div
+              ref={captureAreaRef}
+              className="relative bg-black rounded-xl overflow-hidden aspect-[4/3] flex items-center justify-center"
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              {cameraActive ? (
                 <video
                   ref={videoRef}
-                  className={`absolute inset-0 w-full h-full object-cover ${cameraActive ? '' : 'hidden'}`}
+                  autoPlay
                   playsInline
                   muted
+                  className="w-full h-full object-cover"
                 />
+              ) : uploadedImage ? (
+                <img src={uploadedImage} alt="Uploaded" className="w-full h-full object-cover" />
+              ) : (
+                <div className="text-center text-white/60">
+                  <Camera size={64} className="mx-auto mb-4" />
+                  <p className="text-lg">Start camera or upload a selfie to try on frames</p>
+                </div>
+              )}
 
-                {/* Canvas Overlay */}
-                <canvas
-                  ref={canvasRef}
-                  width={640}
-                  height={480}
-                  className={`absolute inset-0 w-full h-full ${cameraActive ? '' : 'hidden'}`}
-                />
-
-                {/* Uploaded Image */}
-                {uploadedImage && !cameraActive && (
+              {/* Frame Overlay */}
+              {selectedFrame && (cameraActive || uploadedImage) && (
+                <div
+                  className="absolute cursor-move"
+                  style={{
+                    left: `calc(50% + ${framePosition.x}px)`,
+                    top: `calc(45% + ${framePosition.y}px)`,
+                    transform: `translate(-50%, -50%) scale(${frameScale}) rotate(${frameRotation}deg)`,
+                  }}
+                  onMouseDown={handleMouseDown}
+                  onTouchStart={handleTouchStart}
+                >
                   <img
-                    src={uploadedImage}
-                    alt="Uploaded"
-                    className="absolute inset-0 w-full h-full object-cover"
+                    src={selectedFrame.image_url}
+                    alt="Frame"
+                    className="w-64 h-24 object-contain"
+                    style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.4))' }}
+                    crossOrigin="anonymous"
                   />
-                )}
-
-                {/* Frame Overlay */}
-                {selectedProduct && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <svg
-                      viewBox="0 0 200 100"
-                      className="w-1/2 max-w-xs"
-                      style={{ transform: 'translateY(-10%)' }}
-                    >
-                      {/* Frame Left */}
-                      <rect x="10" y="25" width="70" height="50" rx="10" fill="none" stroke="#1e3a5f" strokeWidth="4" />
-                      {/* Frame Right */}
-                      <rect x="120" y="25" width="70" height="50" rx="10" fill="none" stroke="#1e3a5f" strokeWidth="4" />
-                      {/* Bridge */}
-                      <path d="M80 50 Q100 45 120 50" fill="none" stroke="#1e3a5f" strokeWidth="3" />
-                      {/* Temples */}
-                      <line x1="10" y1="35" x2="0" y2="30" stroke="#1e3a5f" strokeWidth="3" />
-                      <line x1="190" y1="35" x2="200" y2="30" stroke="#1e3a5f" strokeWidth="3" />
-                      {/* Lens Shine */}
-                      <ellipse cx="35" cy="45" rx="20" ry="15" fill="url(#goldGlow)" opacity="0.2" />
-                      <ellipse cx="155" cy="45" rx="20" ry="15" fill="url(#goldGlow)" opacity="0.2" />
-                      <defs>
-                        <radialGradient id="goldGlow" cx="50%" cy="50%" r="50%">
-                          <stop offset="0%" stopColor="#d4a853" />
-                          <stop offset="100%" stopColor="transparent" />
-                        </radialGradient>
-                      </defs>
-                    </svg>
-                  </div>
-                )}
-
-                {/* Placeholder */}
-                {!cameraActive && !uploadedImage && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
-                    <Camera size={64} className="mb-4" />
-                    <p className="text-lg">Start camera or upload a photo</p>
-                  </div>
-                )}
-
-                {/* Loading */}
-                {loading && (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    <Loader className="animate-spin text-white" size={40} />
-                  </div>
-                )}
-              </div>
-
-              {/* Controls */}
-              <div className="p-4 flex flex-wrap gap-3 justify-center border-t">
-                {!cameraActive && !uploadedImage ? (
-                  <>
-                    <button
-                      onClick={startCamera}
-                      className="btn-primary flex items-center gap-2"
-                    >
-                      <Camera size={20} />
-                      Start Camera
-                    </button>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="btn-outline flex items-center gap-2"
-                    >
-                      <Upload size={20} />
-                      Upload Photo
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {cameraActive && (
-                      <button
-                        onClick={captureImage}
-                        disabled={capturing}
-                        className="btn-primary flex items-center gap-2"
-                      >
-                        <Download size={20} />
-                        {capturing ? 'Saving...' : 'Save Screenshot'}
-                      </button>
-                    )}
-                    <button
-                      onClick={shareToWhatsApp}
-                      className="bg-green-600 text-white py-2 px-4 rounded-lg flex items-center gap-2 hover:bg-green-700"
-                    >
-                      <MessageCircle size={20} />
-                      Share to WhatsApp
-                    </button>
-                    <button
-                      onClick={() => {
-                        stopCamera();
-                        setUploadedImage(null);
-                      }}
-                      className="btn-outline flex items-center gap-2"
-                    >
-                      <SwitchCamera size={20} />
-                      New Photo
-                    </button>
-                  </>
-                )}
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-              </div>
+                </div>
+              )}
             </div>
 
-            {/* Current Frame Info */}
-            {selectedProduct && (
-              <div className="mt-4 bg-white rounded-xl shadow-sm p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gold-600 font-medium uppercase">
-                      {selectedProduct.brand?.name}
-                    </p>
-                    <h3 className="font-display text-xl font-semibold text-navy-900">
-                      {language === 'te' && selectedProduct.name_te ? selectedProduct.name_te : selectedProduct.name}
-                    </h3>
-                    <p className="text-2xl font-bold text-navy-900 mt-2">
-                      ₹{selectedProduct.price.toLocaleString('en-IN')}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => addToWishlist(selectedProduct)}
-                      className={`p-3 rounded-lg border ${
-                        isInWishlist(selectedProduct.id)
-                          ? 'border-red-500 text-red-500'
-                          : 'border-gray-300'
-                      }`}
-                    >
-                      <Heart size={24} fill={isInWishlist(selectedProduct.id) ? 'currentColor' : 'none'} />
-                    </button>
-                    <button
-                      onClick={() => addToCart(selectedProduct)}
-                      className="btn-primary flex items-center gap-2"
-                    >
-                      <ShoppingBag size={20} />
-                      Add to Cart
-                    </button>
-                  </div>
-                </div>
+            {/* Frame Controls */}
+            {(cameraActive || uploadedImage) && selectedFrame && (
+              <div className="flex items-center gap-3 bg-white rounded-xl p-4 shadow-sm">
+                <span className="text-sm font-medium text-gray-500">Frame Controls:</span>
+                <button
+                  onClick={() => setFrameScale(s => Math.max(0.5, s - 0.1))}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  title="Zoom Out"
+                >
+                  <ZoomOut size={18} />
+                </button>
+                <span className="text-sm font-medium w-12 text-center">{(frameScale * 100).toFixed(0)}%</span>
+                <button
+                  onClick={() => setFrameScale(s => Math.min(2, s + 0.1))}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  title="Zoom In"
+                >
+                  <ZoomIn size={18} />
+                </button>
+                <div className="w-px h-6 bg-gray-300" />
+                <button
+                  onClick={() => setFrameRotation(r => r - 5)}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  title="Rotate Left"
+                >
+                  <RotateCw size={18} className="transform -scale-x-100" />
+                </button>
+                <span className="text-sm font-medium w-12 text-center">{frameRotation}°</span>
+                <button
+                  onClick={() => setFrameRotation(r => r + 5)}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  title="Rotate Right"
+                >
+                  <RotateCw size={18} />
+                </button>
+                <div className="w-px h-6 bg-gray-300" />
+                <button
+                  onClick={() => { setFramePosition({ x: 0, y: 0 }); setFrameScale(1); setFrameRotation(0); }}
+                  className="p-2 hover:bg-gray-100 rounded-lg text-sm font-medium"
+                  title="Reset"
+                >
+                  Reset
+                </button>
+              </div>
+            )}
+
+            {/* Actions */}
+            {(cameraActive || uploadedImage) && (
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={takeScreenshot}
+                  className="flex items-center gap-2 px-4 py-2 bg-navy-800 text-white rounded-lg hover:bg-navy-900 transition-colors"
+                >
+                  <CameraIcon size={18} />
+                  Save Screenshot
+                </button>
+                <button
+                  onClick={() => setShowShare(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <Share2 size={18} />
+                  Share on WhatsApp
+                </button>
+                <button
+                  onClick={addToCart}
+                  className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-white rounded-lg hover:bg-gold-600 transition-colors"
+                >
+                  <ShoppingCart size={18} />
+                  Add Frame to Cart
+                </button>
+              </div>
+            )}
+
+            {showFrameAdded && (
+              <div className="bg-green-50 text-green-600 px-4 py-3 rounded-lg text-sm animate-fade-in">
+                Frame added to cart! <Link to="/cart" className="underline font-medium">View Cart</Link>
               </div>
             )}
           </div>
 
           {/* Frame Selection Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-sm p-6 sticky top-24">
-              <h2 className="font-display text-lg font-semibold text-navy-900 mb-4">
-                Select Frame
-              </h2>
-
-              {/* Category Tabs */}
-              <div className="flex gap-2 mb-4">
-                {categories.map((cat) => (
+          <div className="space-y-4">
+            <h3 className="font-display text-lg font-semibold text-navy-900">Select Frame</h3>
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-navy-800" />
+                </div>
+              ) : (
+                frames.map((frame) => (
                   <button
-                    key={cat}
-                    onClick={() => setActiveCategory(cat)}
-                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
-                      activeCategory === cat
-                        ? 'bg-navy-900 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    key={frame.id}
+                    onClick={() => setSelectedFrame(frame)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
+                      selectedFrame?.id === frame.id
+                        ? 'border-gold-500 bg-gold-50'
+                        : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
-                    {cat.split('-')[1]?.charAt(0).toUpperCase() + cat.split('-')[1]?.slice(1)}
-                  </button>
-                ))}
-              </div>
-
-              {/* Frame List */}
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                {filteredProducts.map((product) => (
-                  <button
-                    key={product.id}
-                    onClick={() => setSelectedProduct(product)}
-                    className={`w-full p-3 rounded-lg flex items-center gap-3 transition-all ${
-                      selectedProduct?.id === product.id
-                        ? 'bg-navy-100 border-2 border-gold-500'
-                        : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100'
-                    }`}
-                  >
-                    <div className="w-12 h-12 bg-white rounded-lg overflow-hidden">
-                      <img
-                        src={product.image_urls?.[0] || 'https://via.placeholder.com/48'}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
+                    <img src={frame.image_url} alt={frame.name} className="w-16 h-12 object-cover rounded-lg" />
+                    <div className="text-left">
+                      <p className="text-sm font-medium text-navy-900 line-clamp-1">{frame.name}</p>
+                      <p className="text-xs text-gray-500">Virtual Try-On</p>
                     </div>
-                    <div className="flex-1 text-left">
-                      <p className="font-medium text-navy-900 text-sm line-clamp-1">
-                        {language === 'te' && product.name_te ? product.name_te : product.name}
-                      </p>
-                      <p className="text-xs text-gray-500">{product.brand?.name}</p>
-                    </div>
-                    <p className="text-sm font-semibold text-navy-900">
-                      ₹{product.price.toLocaleString('en-IN')}
-                    </p>
                   </button>
-                ))}
-              </div>
-
-              {/* View All Button */}
-              <Link
-                to={`/products?category=${activeCategory}`}
-                className="block text-center mt-4 py-2 text-gold-600 hover:text-gold-700 font-medium"
-              >
-                View All Frames
-              </Link>
+                ))
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Share Modal */}
+      {showShare && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display text-lg font-semibold">Share via WhatsApp</h3>
+              <button onClick={() => setShowShare(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-gray-600 text-sm mb-4">Share your virtual try-on with friends and family.</p>
+            <div className="space-y-3">
+              <button
+                onClick={shareWhatsApp}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-green-500 text-white rounded-lg font-medium hover:bg-green-600 transition-colors"
+              >
+                <Share2 size={18} />
+                Share on WhatsApp
+              </button>
+              <button
+                onClick={takeScreenshot}
+                className="w-full flex items-center justify-center gap-2 py-3 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+              >
+                <CameraIcon size={18} />
+                Download Screenshot First
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

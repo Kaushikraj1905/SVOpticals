@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, X, ShoppingBag, Heart, User, Search, Globe, Sparkles } from 'lucide-react';
+import { Menu, X, ShoppingBag, Heart, User, Search, Globe, Sparkles, Wand2 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useCart } from '../../contexts/CartContext';
 import { useWishlist } from '../../contexts/WishlistContext';
@@ -117,10 +117,17 @@ export default function Header() {
 
           {/* Right Actions */}
           <div className="flex items-center gap-2 md:gap-4">
-            {/* Virtual Try-On (Desktop) */}
+            {/* AI Search (Desktop) */}
+            <Link
+              to="/ai-search"
+              className="hidden md:flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg text-sm font-medium hover:from-purple-600 hover:to-pink-600 transition-all"
+            >
+              <Wand2 size={18} />
+              <span className="hidden xl:inline">AI Search</span>
+            </Link>
             <Link
               to="/virtual-try-on"
-              className="hidden md:flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg text-sm font-medium hover:from-purple-600 hover:to-blue-600 transition-all"
+              className="hidden md:flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg text-sm font-medium hover:from-blue-600 hover:to-purple-600 transition-all"
             >
               <Sparkles size={18} />
               <span className="hidden xl:inline">Try On</span>
@@ -277,6 +284,20 @@ export default function Header() {
           >
             <Sparkles size={20} />
             AI Stylist
+          </Link>
+          <Link
+            to="/ai-search"
+            className="text-lg font-medium py-3 border-b border-gray-100 text-purple-600 flex items-center gap-2"
+          >
+            <Wand2 size={20} />
+            AI Search
+          </Link>
+          <Link
+            to="/order-tracking"
+            className="text-lg font-medium py-3 border-b border-gray-100 text-navy-800 flex items-center gap-2"
+          >
+            <Search size={20} />
+            Order Tracking
           </Link>
           {!user && (
             <Link

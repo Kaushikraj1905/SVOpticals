@@ -1,24 +1,35 @@
-import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { Heart, ShoppingBag, Share2, ArrowLeft, Star, Check, Truck, Shield, RotateCcw } from 'lucide-react';
+import { useState, useEffect, lazy, Suspense } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { Heart, ShoppingBag, Share2, ArrowLeft, Star, Check, Truck, Shield, RotateCcw, Upload, View, ScanEye, Eye, Pill } from 'lucide-react';
 import { Product } from '../types';
 import { supabase } from '../lib/supabase';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useCart } from '../contexts/CartContext';
 import { useWishlist } from '../contexts/WishlistContext';
+import { useAuth } from '../contexts/AuthContext';
 import ProductCard from '../components/products/ProductCard';
 
+const Product3DViewer = lazy(() => import('../components/products/Product3DViewer'));
+
 export default function ProductDetailPage() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const { t, language } = useLanguage();
   const { addItem: addToCart } = useCart();
   const { addItem: addToWishlist, removeItem: removeFromWishlist, isInWishlist } = useWishlist();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
+  const [show3D, setShow3D] = useState(false);
+  const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
+  const [showPrescriptionUpload, setShowPrescriptionUpload] = useState(false);
+  const [showToast, setShowToast] = useState<string | null>(null);
+  const [showWishlistToast, setShowWishlistToast] = useState(false);
+  const [showCartToast, setShowCartToast] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -28,6 +39,9 @@ export default function ProductDetailPage() {
 
   const fetchProduct = async () => {
     try {
+      // Increment view count
+      await supabase.rpc('increment_view_count', { p_id: id });
+
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -54,6 +68,7 @@ export default function ProductDetailPage() {
           `)
           .eq('category_id', data.category_id)
           .neq('id', id)
+          .eq('is_active', true)
           .limit(4);
         setRelatedProducts(related || []);
       }
@@ -61,6 +76,79 @@ export default function ProductDetailPage() {
       console.error('Error fetching product:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddToCart = async () => {
+    if (!product) return;
+    await addToCart(product, quantity);
+    setShowCartToast(true);
+    setTimeout(() => setShowCartToast(false), 2000);
+  };
+
+  const handleWishlistToggle = () => {
+    if (!product) return;
+    if (isInWishlist(product.id)) {
+      removeFromWishlist(product.id);
+      setShowToast('Removed from wishlist');
+    } else {
+      addToWishlist(product);
+      setShowToast('Added to wishlist');
+    }
+    setTimeout(() => setShowToast(null), 2000);
+  };
+
+  const handleShare = async () => {
+    if (!product) return;
+    const shareData = {
+      title: product.name,
+      text: `Check out ${product.name} from S V Opticals!`,
+      url: window.location.href,
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(window.location.href);
+        setShowToast('Link copied to clipboard');
+        setTimeout(() => setShowToast(null), 2000);
+      }
+    } catch {
+      // ignored
+    }
+  };
+
+  const handlePrescriptionUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !product || !user) return;
+
+    setPrescriptionFile(file);
+    try {
+      const fileName = `prescriptions/${user.id}/${product.id}/${Date.now()}_${file.name}`;
+      const { data, error } = await supabase.storage
+        .from('prescriptions')
+        .upload(fileName, file);
+
+      if (error) throw error;
+
+      const { data: urlData } = await supabase.storage
+        .from('prescriptions')
+        .getPublicUrl(fileName);
+
+      await supabase.from('prescriptions').insert({
+        user_id: user.id,
+        product_id: product.id,
+        file_url: urlData.publicUrl,
+        file_name: file.name,
+      });
+
+      setShowToast('Prescription uploaded successfully');
+      setTimeout(() => setShowToast(null), 2000);
+      setShowPrescriptionUpload(false);
+    } catch (error) {
+      console.error('Error uploading prescription:', error);
+      setShowToast('Failed to upload prescription');
+      setTimeout(() => setShowToast(null), 2000);
     }
   };
 
@@ -89,11 +177,27 @@ export default function ProductDetailPage() {
   const productDesc = language === 'te' && product.description_te ? product.description_te : product.description;
   const images = product.image_urls?.length > 0 ? product.image_urls : ['https://images.pexels.com/photos/7018515/pexels-photo-7018515.jpeg?auto=compress&cs=tinysrgb&w=400'];
   const inStock = product.inventory ? product.inventory.quantity > 0 : true;
+  const stockQuantity = product.inventory?.quantity || 0;
   const discount = product.mrp > product.price ? Math.round(((product.mrp - product.price) / product.mrp) * 100) : 0;
   const inWishlist = isInWishlist(product.id);
+  const isLens = product.category?.name?.toLowerCase().includes('lens') || product.category?.name?.toLowerCase().includes('prescription');
+  const isFrame = product.category?.name?.toLowerCase().includes('frame') || product.tags?.includes('frames');
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Toast Notifications */}
+      {showToast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-navy-900 text-white px-6 py-3 rounded-lg shadow-lg animate-fade-in-down">
+          {showToast}
+        </div>
+      )}
+      {showCartToast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg animate-fade-in-down flex items-center gap-2">
+          <Check size={18} />
+          Added to cart!
+        </div>
+      )}
+
       {/* Breadcrumb */}
       <div className="bg-white border-b">
         <div className="container mx-auto px-4 py-4">
@@ -109,24 +213,42 @@ export default function ProductDetailPage() {
         <div className="grid lg:grid-cols-2 gap-8">
           {/* Images */}
           <div className="space-y-4">
-            <div className="bg-white rounded-xl overflow-hidden">
+            <div className="bg-white rounded-xl overflow-hidden relative">
               <img
                 src={images[selectedImage]}
                 alt={productName}
                 className="w-full aspect-square object-cover"
               />
+              {/* 3D View Button */}
+              <button
+                onClick={() => setShow3D(true)}
+                className="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm font-medium text-navy-800 hover:bg-white transition-colors"
+              >
+                <View size={16} />
+                View in 3D
+              </button>
+              {/* Try On Button */}
+              {(isFrame || product.tags?.some(t => ['frames', 'sunglasses'].includes(t))) && (
+                <Link
+                  to={`/virtual-try-on?product=${product.id}`}
+                  className="absolute bottom-4 left-4 bg-gold-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm font-medium hover:bg-gold-600 transition-colors"
+                >
+                  <ScanEye size={16} />
+                  Try Before You Buy
+                </Link>
+              )}
             </div>
             {images.length > 1 && (
-              <div className="flex gap-4 overflow-x-auto">
+              <div className="flex gap-3 overflow-x-auto pb-2">
                 {images.map((img, index) => (
                   <button
                     key={index}
                     onClick={() => setSelectedImage(index)}
-                    className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 ${
-                      selectedImage === index ? 'border-gold-500' : 'border-gray-200'
+                    className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-colors ${
+                      selectedImage === index ? 'border-gold-500' : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
-                    <img src={img} alt="" className="w-full h-full object-cover" />
+                    <img src={img} alt={`${productName} ${index + 1}`} className="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>
@@ -153,10 +275,12 @@ export default function ProductDetailPage() {
                 ))}
               </div>
               <span className="text-sm text-gray-500">(4.0 - 23 reviews)</span>
+              <span className="text-sm text-gray-400">|</span>
+              <span className="text-sm text-green-600 font-medium">{product.view_count || 0} views</span>
             </div>
 
             {/* Price */}
-            <div className="flex items-baseline gap-3 mb-6">
+            <div className="flex items-baseline gap-3 mb-4">
               <span className="text-3xl font-bold text-navy-900">
                 ₹{product.price.toLocaleString('en-IN')}
               </span>
@@ -173,35 +297,53 @@ export default function ProductDetailPage() {
             </div>
 
             {/* Stock Status */}
-            <div className={`inline-flex items-center gap-2 mb-6 ${inStock ? 'text-green-600' : 'text-red-600'}`}>
-              {inStock ? <Check size={20} /> : null}
-              <span className="font-medium">{inStock ? t('inStock') : t('outOfStock')}</span>
-              {product.inventory && <span className="text-gray-500">({product.inventory.quantity} available)</span>}
+            <div className={`inline-flex items-center gap-2 mb-6 px-3 py-1 rounded-lg text-sm font-medium ${
+              inStock ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+            }`}>
+              {inStock ? <Check size={16} /> : <Eye size={16} />}
+              <span>{inStock ? 'In Stock' : 'Out of Stock'}</span>
+              {stockQuantity > 0 && (
+                <span className="text-green-600/70">({stockQuantity} available)</span>
+              )}
+              {stockQuantity <= 5 && stockQuantity > 0 && (
+                <span className="text-orange-600 text-xs font-medium"> - Low stock!</span>
+              )}
             </div>
 
             {/* Description */}
             {productDesc && (
-              <p className="text-gray-600 mb-6">{productDesc}</p>
+              <p className="text-gray-600 mb-6 leading-relaxed">{productDesc}</p>
             )}
 
             {/* Specifications */}
             {product.specifications && Object.keys(product.specifications).length > 0 && (
-              <div className="mb-6">
+              <div className="mb-6 bg-gray-50 rounded-xl p-4">
                 <h3 className="font-semibold text-navy-900 mb-3">Specifications</h3>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   {Object.entries(product.specifications).map(([key, value]) => (
                     <div key={key} className="text-sm">
-                      <span className="text-gray-500 capitalize">{key.replace(/_/g, ' ')}:</span>{' '}
-                      <span className="text-navy-800">{value}</span>
+                      <span className="text-gray-500 capitalize block text-xs">{key.replace(/_/g, ' ')}</span>
+                      <span className="text-navy-800 font-medium">{value}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
+            {/* Tags */}
+            {product.tags && product.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-6">
+                {product.tags.map((tag) => (
+                  <span key={tag} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded capitalize">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
             {/* Quantity */}
             <div className="mb-6">
-              <label className="block text-sm font-medium text-navy-800 mb-2">{t('quantity')}</label>
+              <label className="block text-sm font-medium text-navy-800 mb-2">Quantity</label>
               <div className="flex items-center border rounded-lg w-32">
                 <button
                   onClick={() => setQuantity(q => Math.max(1, q - 1))}
@@ -211,7 +353,7 @@ export default function ProductDetailPage() {
                 </button>
                 <span className="flex-1 text-center font-medium">{quantity}</span>
                 <button
-                  onClick={() => setQuantity(q => q + 1)}
+                  onClick={() => setQuantity(q => Math.min(stockQuantity || 99, q + 1))}
                   className="p-3 hover:bg-gray-100 transition-colors"
                 >
                   +
@@ -220,32 +362,66 @@ export default function ProductDetailPage() {
             </div>
 
             {/* Actions */}
-            <div className="flex gap-4 mb-8">
+            <div className="flex gap-3 mb-6">
               <button
-                onClick={() => addToCart(product, quantity)}
+                onClick={handleAddToCart}
                 disabled={!inStock}
                 className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-medium transition-colors ${
                   inStock ? 'btn-primary' : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >
                 <ShoppingBag size={20} />
-                {t('addToCart')}
+                Add to Cart
               </button>
               <button
-                onClick={() => inWishlist ? removeFromWishlist(product.id) : addToWishlist(product)}
+                onClick={handleWishlistToggle}
                 className={`p-3 rounded-lg border transition-colors ${
                   inWishlist ? 'border-red-500 text-red-500' : 'border-gray-300 text-gray-400 hover:border-red-500 hover:text-red-500'
                 }`}
+                title={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
               >
                 <Heart size={24} fill={inWishlist ? 'currentColor' : 'none'} />
               </button>
-              <button className="p-3 rounded-lg border border-gray-300 text-gray-400 hover:border-gold-500 hover:text-gold-500 transition-colors">
+              <button
+                onClick={handleShare}
+                className="p-3 rounded-lg border border-gray-300 text-gray-400 hover:border-gold-500 hover:text-gold-500 transition-colors"
+                title="Share"
+              >
                 <Share2 size={24} />
               </button>
             </div>
 
+            {/* Prescription Upload for lenses */}
+            {isLens && (
+              <div className="mb-6">
+                <button
+                  onClick={() => setShowPrescriptionUpload(!showPrescriptionUpload)}
+                  className="flex items-center gap-2 text-sm text-navy-700 hover:text-gold-600 transition-colors"
+                >
+                  <Pill size={16} />
+                  {showPrescriptionUpload ? 'Hide prescription upload' : 'Upload prescription'}
+                </button>
+                {showPrescriptionUpload && (
+                  <div className="mt-3 border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={handlePrescriptionUpload}
+                      className="hidden"
+                      id="prescription-upload"
+                    />
+                    <label htmlFor="prescription-upload" className="cursor-pointer">
+                      <Upload size={24} className="mx-auto text-gray-400 mb-2" />
+                      <p className="text-sm text-gray-600">{prescriptionFile ? prescriptionFile.name : 'Click to upload prescription'}</p>
+                      <p className="text-xs text-gray-400 mt-1">Image or PDF</p>
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Benefits */}
-            <div className="flex flex-wrap gap-4">
+            <div className="flex flex-wrap gap-4 pt-4 border-t">
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <Truck size={18} className="text-green-600" />
                 Free Delivery
@@ -274,6 +450,17 @@ export default function ProductDetailPage() {
           </div>
         )}
       </div>
+
+      {/* 3D Viewer Modal */}
+      {show3D && (
+        <Suspense fallback={
+          <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+          </div>
+        }>
+          <Product3DViewer imageUrl={images[0]} onClose={() => setShow3D(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

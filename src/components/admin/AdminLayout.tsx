@@ -10,25 +10,33 @@ import {
   Menu,
   X,
   LogOut,
+  Truck,
+  AlertTriangle,
+  Sparkles,
+  DollarSign,
+  Database,
+  Pill,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import Logo from '../common/Logo';
 
-const navItems = [
-  { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
-  { to: '/admin/inventory', icon: Package, label: 'Inventory' },
-  { to: '/admin/orders', icon: ShoppingCart, label: 'Orders' },
-  { to: '/admin/customers', icon: Users, label: 'Customers' },
-  { to: '/admin/reports', icon: BarChart3, label: 'Reports' },
-  { to: '/admin/settings', icon: Settings, label: 'Settings' },
-];
-
 export default function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, userRole, signOut } = useAuth();
   const { t } = useLanguage();
+
+  const navItems = [
+    { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
+    { to: '/admin/inventory', icon: Package, label: 'Inventory' },
+    { to: '/admin/orders', icon: ShoppingCart, label: 'Orders' },
+    { to: '/admin/customers', icon: Users, label: 'Customers' },
+    { to: '/admin/purchases', icon: Truck, label: 'Purchases' },
+    { to: '/admin/reports', icon: BarChart3, label: 'Reports' },
+    { to: '/admin/alerts', icon: AlertTriangle, label: 'Alerts' },
+    { to: '/admin/settings', icon: Settings, label: 'Settings' },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-100 flex">

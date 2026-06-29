@@ -79,14 +79,14 @@ export default function CartPage() {
                         {/* Quantity */}
                         <div className="flex items-center border rounded-lg">
                           <button
-                            onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
+                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
                             className="p-2 hover:bg-gray-100 transition-colors"
                           >
                             <Minus size={16} />
                           </button>
                           <span className="w-12 text-center font-medium">{item.quantity}</span>
                           <button
-                            onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
                             className="p-2 hover:bg-gray-100 transition-colors"
                           >
                             <Plus size={16} />
