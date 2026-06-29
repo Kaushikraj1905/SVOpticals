@@ -25,6 +25,14 @@ export default function Footer() {
     { to: '/products?category=lenses', label: t('lenses') },
   ];
 
+  const seoLinks = [
+    { to: '/optical-store-hyderabad', label: 'Optical Store Hyderabad' },
+    { to: '/eyeglasses-abids', label: 'Eyeglasses Abids' },
+    { to: '/contact-lenses-hyderabad', label: 'Contact Lenses Hyderabad' },
+    { to: '/eye-testing-hyderabad', label: 'Eye Testing Hyderabad' },
+    { to: '/blue-cut-glasses-hyderabad', label: 'Blue Cut Glasses Hyderabad' },
+  ];
+
   return (
     <footer className="bg-navy-950 text-white">
       {/* Main Footer */}
@@ -118,6 +126,20 @@ export default function Footer() {
               {productLinks.map((link) => (
                 <li key={link.to}>
                   <Link to={link.to} className="text-gray-300 hover:text-gold-400 transition-colors">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* SEO Pages */}
+          <div>
+            <h3 className="font-display text-lg font-semibold text-gold-400 mb-6">Locations</h3>
+            <ul className="space-y-3">
+              {seoLinks.map((link) => (
+                <li key={link.to}>
+                  <Link to={link.to} className="text-gray-300 hover:text-gold-400 transition-colors text-sm">
                     {link.label}
                   </Link>
                 </li>

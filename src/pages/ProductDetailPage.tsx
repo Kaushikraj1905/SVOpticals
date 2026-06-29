@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Heart, ShoppingBag, Share2, ArrowLeft, Star, Check, Truck, Shield, RotateCcw, Upload, View, ScanEye, Eye, Pill } from 'lucide-react';
+import { Heart, ShoppingBag, Share2, ArrowLeft, Star, Check, Truck, Shield, RotateCcw, Upload, View, ScanEye, Eye, Pill, Ruler, Palette, Weight, Award, Sparkles, ThumbsUp } from 'lucide-react';
 import { Product } from '../types';
 import { supabase } from '../lib/supabase';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -267,14 +267,14 @@ export default function ProductDetailPage() {
               {productName}
             </h1>
 
-            {/* Rating */}
+            {/* Rating - Dynamic */}
             <div className="flex items-center gap-2 mb-6">
               <div className="flex items-center gap-1">
                 {[...Array(5)].map((_, i) => (
-                  <Star key={i} size={16} className="text-gold-500" fill={i < 4 ? 'currentColor' : 'none'} />
+                  <Star key={i} size={16} className="text-gold-500" fill={i < (product.rating || 0) ? 'currentColor' : 'none'} />
                 ))}
               </div>
-              <span className="text-sm text-gray-500">(4.0 - 23 reviews)</span>
+              <span className="text-sm text-gray-500">({product.rating || 0} - {product.review_count || 0} reviews)</span>
               <span className="text-sm text-gray-400">|</span>
               <span className="text-sm text-green-600 font-medium">{product.view_count || 0} views</span>
             </div>
@@ -314,6 +314,71 @@ export default function ProductDetailPage() {
             {productDesc && (
               <p className="text-gray-600 mb-6 leading-relaxed">{productDesc}</p>
             )}
+
+            {/* Features */}
+            {product.features && product.features.length > 0 && (
+              <div className="mb-6">
+                <h3 className="font-semibold text-navy-900 mb-3 flex items-center gap-2">
+                  <Sparkles size={18} className="text-gold-500" /> Features
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {product.features.map((feature, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 px-3 py-1 rounded-full">
+                      <Check size={12} /> {feature}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Frame & Product Details */}
+            <div className="mb-6 bg-gray-50 rounded-xl p-4">
+              <h3 className="font-semibold text-navy-900 mb-3">Frame Details</h3>
+              <div className="grid grid-cols-2 gap-3">
+                {product.frame_shape && (
+                  <div className="text-sm">
+                    <span className="text-gray-500 block text-xs">Frame Shape</span>
+                    <span className="text-navy-800 font-medium">{product.frame_shape}</span>
+                  </div>
+                )}
+                {product.material && (
+                  <div className="text-sm">
+                    <span className="text-gray-500 block text-xs">Material</span>
+                    <span className="text-navy-800 font-medium">{product.material}</span>
+                  </div>
+                )}
+                {product.gender && (
+                  <div className="text-sm">
+                    <span className="text-gray-500 block text-xs">Gender</span>
+                    <span className="text-navy-800 font-medium">{product.gender}</span>
+                  </div>
+                )}
+                {product.color && (
+                  <div className="text-sm">
+                    <span className="text-gray-500 block text-xs">Color</span>
+                    <span className="text-navy-800 font-medium">{product.color}</span>
+                  </div>
+                )}
+                {product.size && (
+                  <div className="text-sm">
+                    <span className="text-gray-500 block text-xs">Size</span>
+                    <span className="text-navy-800 font-medium">{product.size}</span>
+                  </div>
+                )}
+                {product.weight && (
+                  <div className="text-sm">
+                    <span className="text-gray-500 block text-xs">Weight</span>
+                    <span className="text-navy-800 font-medium">{product.weight}</span>
+                  </div>
+                )}
+                {product.warranty && (
+                  <div className="text-sm">
+                    <span className="text-gray-500 block text-xs">Warranty</span>
+                    <span className="text-navy-800 font-medium">{product.warranty}</span>
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Specifications */}
             {product.specifications && Object.keys(product.specifications).length > 0 && (

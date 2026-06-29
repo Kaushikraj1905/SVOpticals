@@ -24,6 +24,13 @@ import LoginPage from './pages/LoginPage';
 import OrderTrackingPage from './pages/OrderTrackingPage';
 import AISearchPage from './pages/AISearchPage';
 
+// SEO Pages
+import OpticalStoreHyderabadPage from './pages/OpticalStoreHyderabadPage';
+import EyeglassesAbidsPage from './pages/EyeglassesAbidsPage';
+import ContactLensesPage from './pages/ContactLensesPage';
+import EyeTestingPage from './pages/EyeTestingPage';
+import BlueCutGlassesPage from './pages/BlueCutGlassesPage';
+
 // Virtual Try-On
 import VirtualTryOnPage from './pages/virtual-tryon/VirtualTryOnPage';
 
@@ -109,6 +116,11 @@ function App() {
                   <Route path="virtual-try-on" element={<VirtualTryOnPage />} />
                   <Route path="ai-stylist" element={<AIStylistPage />} />
                   <Route path="ai-search" element={<AISearchPage />} />
+                  <Route path="optical-store-hyderabad" element={<OpticalStoreHyderabadPage />} />
+                  <Route path="eyeglasses-abids" element={<EyeglassesAbidsPage />} />
+                  <Route path="contact-lenses-hyderabad" element={<ContactLensesPage />} />
+                  <Route path="eye-testing-hyderabad" element={<EyeTestingPage />} />
+                  <Route path="blue-cut-glasses-hyderabad" element={<BlueCutGlassesPage />} />
                 </Route>
 
                 {/* Admin Routes */}

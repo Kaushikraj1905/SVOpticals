@@ -141,12 +141,12 @@ export default function ProductCard({ product, featured = false }: ProductCardPr
             {productName}
           </h3>
 
-          {/* Rating placeholder */}
+          {/* Rating - dynamic */}
           <div className="flex items-center gap-1 mb-2">
             {[...Array(5)].map((_, i) => (
-              <Star key={i} size={12} className="text-gold-500" fill={i < 4 ? 'currentColor' : 'none'} />
+              <Star key={i} size={12} className="text-gold-500" fill={i < Math.round(product.rating || 0) ? 'currentColor' : 'none'} />
             ))}
-            <span className="text-xs text-gray-500 ml-1">(4.0)</span>
+            <span className="text-xs text-gray-500 ml-1">({product.rating?.toFixed(1) || '0'} · {product.review_count || 0})</span>
           </div>
 
           {/* Price */}
